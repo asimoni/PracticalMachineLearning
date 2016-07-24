@@ -1,0 +1,119 @@
+----
+title: "Practical Machine Learning Course Project"
+author: "Andrea Simoni"
+date: "22 luglio 2016"
+output: html_document
+---
+
+##Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: <http://groupware.les.inf.puc-rio.br/har> (see the section on the Weight Lifting Exercise Dataset).
+
+##Data
+
+The training data for this project are available here:
+
+<https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv>
+
+The test data are available here:
+
+<https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv>
+
+
+##Goal of the project
+The goal of the project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. 
+We then use the model to predict 20 different test cases contained in pml-testing.csv.
+
+##Reproducibility
+```{r, results="hide"}
+# loads the caret library
+library(caret)
+library(randomForest)
+library(gbm)
+
+# sets seed
+set.seed(14785)
+```
+
+##Data loading
+The data were cleaned first during import, replacing missing or invalid values with NA
+```{r}
+# data loading
+data <- read.csv("pml-training.csv", na.strings=c("NA","#DIV/0!", ""))
+data.dim <- dim(data)
+data.dim
+```
+The loaded data set is made of 19622 observations of  160 variables. 
+
+## Data cleaning and pre-processing
+```{r, results="hide"}
+str(data)
+```
+A close examination of the uploaded data shows the presence of columns with a large number of NA values. We also note that the first 7 columns show purely descriptive data. then we proceed with a preliminary data cleansing.
+A vector is used for the selection of relevant columns and the removal of those not relevant.
+The same vector is used later for columns selection in the data used for the prediction (Test dataset).
+```{r, results="hide"}
+# locates the columns with less of 60% of NA values
+cols.selector <-  colSums(is.na(data))/data.dim[1] < 0.6
+# first 7 columns are descriptive and do not affect the forecast: they will be removed
+cols.selector[1:7] <- FALSE
+# removes data columns that will not be used
+data<-data[,cols.selector]
+```
+This phase of pre-cleaning allowed us to reduce the dataset to 53 variables
+
+## Cross validation
+Cross-validation will be performed by subsampling our training data set randomly without replacement into 2 subsamples: training data (70% of the original data set) and testing data (30%).
+```{r, results="hide"}
+# splits data for cross validation
+train <- createDataPartition(y=data$classe,p=.70,list=F)
+data.training <- data[train,]
+data.testing <- data[-train,]
+```
+##Model
+We chose to evaluate two models of prediction:
+*Random forest
+*Boosting with trees
+after evaluating the behavior, the better of the two will be chosen
+###Random forest
+```{r}
+
+model.randomForest <- train(classe ~ ., data = data.training, method = "rf", verbose=FALSE)
+
+prediction.randomForest <- predict(model.randomForest, data.testing)
+
+confusionMatrix.randomForest <- confusionMatrix(prediction.randomForest, data.testing$classe)
+print(confusionMatrix.randomForest)
+```
+
+###Boosting with trees
+```{r}
+
+model.boosting <- train(classe ~ ., data = data.training, method = "gbm", verbose=FALSE)
+
+prediction.boosting <- predict(model.boosting, data.testing)
+
+confusionMatrix.boosting <- confusionMatrix(prediction.boosting, data.testing$classe)
+print(confusionMatrix.boosting)
+
+```
+
+###COnclusion
+The Random forest model is the best performer, with an accuracy value of 0.991164.
+We should expect an out of sample error of 0.9% (1-Accuracy)
+
+
+##Prediction
+```{r}
+test <- read.csv("pml-testing.csv", na.strings=c("NA","#DIV/0!", ""))
+test.subset <- test[, cols.selector]
+
+prediction <- predict(model.randomForest, test.subset)
+prediction
+
+```
+
+
+##References
+Ugulino, W.; Cardador, D.; Vega, K.; Velloso, E.; Milidiu, R.; Fuks, H. Wearable Computing: Accelerometers' Data Classification of Body Postures and Movements. Proceedings of 21st Brazilian Symposium on Artificial Intelligence. Advances in Artificial Intelligence - SBIA 2012. In: Lecture Notes in Computer Science. , pp. 52-61. Curitiba, PR: Springer Berlin / Heidelberg, 2012. ISBN 978-3-642-34458-9. DOI: 10.1007/978-3-642-34459-6_6. 
+
+Read more: <http://groupware.les.inf.puc-rio.br/har#dataset#ixzz4FJXkz8pS>
